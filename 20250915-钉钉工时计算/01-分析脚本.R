@@ -1,16 +1,17 @@
-# 根据钉钉导出考勤数据的「每日统计」表和公司上下班节点
-# 计算在公司的公司
-
 library(tidyverse)
 library(readxl)
 
-file_path = "data/公司_考勤报表_20250801-20250831.xlsx"
+file_path = "data/xxx.xlsx"
 
 morning_begin <- "09:00"
 morning_end <- "12:00"
 afternoon_begin <- "13:30"
 afternoon_end <- "18:00"
 night_begin <- "19:00"
+
+# 上午下午计算工作天数时长要求
+day_morning = 2 * 60
+day_afternoon = 3.5 * 60
 
 parse_time <- function(d, t) {
   ymd_hm(paste(d, t, sep = " "), quiet = TRUE)
@@ -47,15 +48,23 @@ dt <- read_xlsx(file_path, sheet = "每日统计", skip = 2) |>
     审批结束时间 = parse_time(year(日期), str_extract(关联的审批单, "(?<=到)\\d{2}-\\d{2} \\d{2}:\\d{2}")),
     上班时间 = case_when(
       !is.na(上班时间) ~ 上班时间,
-      审批类型 %in% c("出差", "外出", "补卡申请", "加班") ~ 审批起始时间,
-      审批类型 %in% c("年假", "事假", "病假", "调休") ~ NA,
+      审批类型 %in% c("出差", "外出", "补卡申请", "加班") &
+        日期 > as_date(审批起始时间) & 日期 <= as_date(审批结束时间) ~ parse_time(日期, morning_begin),
+      审批类型 %in% c("出差", "外出", "补卡申请", "加班") &
+        日期 == as_date(审批起始时间) & 日期 <= as_date(审批结束时间) ~ 审批起始时间,
+      审批类型 %in% c("年假", "事假", "病假", "调休") & is.na(下班时间) ~ NA,
+      审批类型 %in% c("年假", "事假", "病假", "调休") & !is.na(下班时间) ~ parse_time(日期, afternoon_begin),
       !is.na(下班时间) ~ parse_time(日期, morning_begin),
       .default = NA
     ),
     下班时间 = case_when(
       !is.na(下班时间) ~ 下班时间,
-      审批类型 %in% c("出差", "外出", "补卡申请", "加班") ~ 审批结束时间,
-      审批类型 %in% c("年假", "事假", "病假", "调休") ~ NA,
+      审批类型 %in% c("出差", "外出", "补卡申请", "加班") &
+        日期 >= as_date(审批起始时间) & 日期 < as_date(审批结束时间) ~ parse_time(日期, afternoon_end),
+      审批类型 %in% c("出差", "外出", "补卡申请", "加班") &
+        日期 >= as_date(审批起始时间) & 日期 == as_date(审批结束时间) ~ 审批结束时间,
+      审批类型 %in% c("年假", "事假", "病假", "调休") & is.na(上班时间)~ NA,
+      审批类型 %in% c("年假", "事假", "病假", "调休") & !is.na(上班时间) ~ parse_time(日期, morning_end),
       !is.na(上班时间) ~ parse_time(日期, afternoon_end),
       .default = NA
     ),
@@ -63,11 +72,11 @@ dt <- read_xlsx(file_path, sheet = "每日统计", skip = 2) |>
       is.na(上班时间) ~ 0,
       上班时间 >= parse_time(日期, morning_end) ~ 0,
       上班时间 <= parse_time(日期, morning_begin) & 下班时间 >= parse_time(日期, morning_end) ~
-        time_length_cal(parse_time(日期, morning_begin), parse_time(日期, morning_end)),
+        time_length_cal(上班时间, parse_time(日期, morning_end)),
       上班时间 > parse_time(日期, morning_begin) & 下班时间 >= parse_time(日期, morning_end) ~
         time_length_cal(上班时间, parse_time(日期, morning_end)),
       上班时间 <= parse_time(日期, morning_begin) & 下班时间 < parse_time(日期, morning_end) ~
-        time_length_cal(parse_time(日期, morning_begin), 下班时间),
+        time_length_cal(上班时间, 下班时间),
       上班时间 > parse_time(日期, morning_begin) & 下班时间 < parse_time(日期, morning_end) ~
         time_length_cal(上班时间, 下班时间)
     ),
@@ -89,4 +98,54 @@ dt <- read_xlsx(file_path, sheet = "每日统计", skip = 2) |>
       .default = time_length_cal(parse_time(日期, night_begin), 下班时间)
     ),
     工作时长 = 时长_上午 + 时长_下午 + 时长_晚上
-  ) 
+  )
+
+dt_month = dt |> 
+  summarise(
+    .by = c(部门, 姓名),
+    工作时长 = round(sum(工作时长) / 60, 2),
+    工作天数 = sum(
+      ifelse(时长_上午 >= day_morning, 0.5, 0),
+      ifelse(时长_下午 >= day_afternoon, 0.5, 0)
+    )
+  )
+
+writexl::write_xlsx(
+  list(
+    每日工作时长明细 = dt,
+    每月工作时长 = dt_month
+  ),
+  path = "钉钉考勤分析结果.xlsx"
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
