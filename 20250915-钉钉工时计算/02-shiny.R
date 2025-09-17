@@ -18,7 +18,7 @@ ui <- fluidPage(
       fileInput("file", "上传钉钉考勤报表（.xlsx，sheet 为“每日统计”）", accept = c(".xlsx")),
       tags$hr(),
       h4("工作天数计入阈值（分钟）"),
-      numericInput("day_morning", "上午计入 0.5 天的最少分钟数", value = 2*60, min = 0, step = 5),
+      numericInput("day_morning", "上午计入 0.5 天的最少分钟数", value = 1*60, min = 0, step = 5),
       numericInput("day_afternoon", "下午计入 0.5 天的最少分钟数", value = 3.5*60, min = 0, step = 5),
       tags$hr(),
       downloadButton("download", "下载最终结果（含每日明细与每月汇总）", class = "btn-primary")
@@ -115,6 +115,8 @@ server <- function(input, output, session){
           .default = NA
         ),
         下班时间 = case_when(
+          !is.na(下班时间) & 审批类型 %in% c("出差", "外出") & 日期 == as_date(审批起始时间) &
+            下班时间 <= parse_time(日期, afternoon_end) & 审批结束时间 >= parse_time(日期, afternoon_end) ~ parse_time(日期, afternoon_end),
           !is.na(下班时间) ~ 下班时间,
           审批类型 %in% c("出差", "外出", "补卡申请", "加班") &
             日期 >= as_date(审批起始时间) & 日期 < as_date(审批结束时间) ~ parse_time(日期, afternoon_end),

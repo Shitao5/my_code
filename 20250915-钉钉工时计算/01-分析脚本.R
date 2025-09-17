@@ -1,7 +1,7 @@
 library(tidyverse)
 library(readxl)
 
-file_path = "data/xxx.xlsx"
+file_path = "data/考勤报表_20250601-20250630(2).xlsx"
 
 morning_begin <- "09:00"
 morning_end <- "12:00"
@@ -10,7 +10,7 @@ afternoon_end <- "18:00"
 night_begin <- "19:00"
 
 # 上午下午计算工作天数时长要求
-day_morning = 2 * 60
+day_morning = 1 * 60
 day_afternoon = 3.5 * 60
 
 parse_time <- function(d, t) {
@@ -58,6 +58,8 @@ dt <- read_xlsx(file_path, sheet = "每日统计", skip = 2) |>
       .default = NA
     ),
     下班时间 = case_when(
+      !is.na(下班时间) & 审批类型 %in% c("出差", "外出") & 日期 == as_date(审批起始时间) &
+        下班时间 <= parse_time(日期, afternoon_end) & 审批结束时间 >= parse_time(日期, afternoon_end) ~ parse_time(日期, afternoon_end),
       !is.na(下班时间) ~ 下班时间,
       审批类型 %in% c("出差", "外出", "补卡申请", "加班") &
         日期 >= as_date(审批起始时间) & 日期 < as_date(审批结束时间) ~ parse_time(日期, afternoon_end),
