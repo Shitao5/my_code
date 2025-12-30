@@ -40,7 +40,7 @@ python3.13 funasr_nano_cli_transcribe.py /path/to/a.mp3 --device cpu
 ## 运行示例
 
 ```bash
-cd /home/shitao5/rproject/my_code/20251230-录音转写
+cd /home/shitao5/rproject/my_code/20251230-audio-transcription
 python3.13 funasr_nano_cli_transcribe.py /home/shitao5/test/16k16bit.mp3
 ```
 
